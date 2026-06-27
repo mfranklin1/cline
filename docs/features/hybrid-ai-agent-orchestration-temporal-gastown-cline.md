@@ -388,9 +388,7 @@ The chat front end should support selecting Temporal workflow templates, selecti
 Example commands:
 
 ```text
-/start repo-readiness for certifyos/api-layer
 /start plan-to-convoy using docs/agent-plans/firefighter/PLAN.md
-/review-pr certifyos/api-layer#1477
 /show convoy cv-abc123
 /show agents for rig api-layer
 /nudge agent polecat-7
@@ -428,7 +426,7 @@ run_validation_in_worktree
 
 ## Mac M4 Implementation Profile
 
-CertifyOS has already cloned Cline and added Mac M4 support directly. The architecture should treat Mac M4 laptops as first-class local execution nodes, not merely developer machines.
+Cline has been extended with Mac M4 support directly. The architecture should treat Mac M4 laptops as first-class local execution nodes, not merely developer machines.
 
 Goal:
 
@@ -600,7 +598,7 @@ Recommended fork boundaries:
 
 Recommendation: start without a hard fork if possible; create an adapter first.
 
-Fork Gas Town only if needed for structured JSON output for commands, a stable API/SDK surface, enterprise auth/RBAC integration, model/cost metadata capture, Cline MacM4 runtime hooks, Temporal worker callbacks, custom evidence emission, or CertifyOS-specific policy gates.
+Fork Gas Town only if needed for structured JSON output for commands, a stable API/SDK surface, enterprise auth/RBAC integration, model/cost metadata capture, Cline MacM4 runtime hooks, Temporal worker callbacks, or custom evidence emission.
 
 Preferred strategy:
 
@@ -622,7 +620,7 @@ Fork Beads only if required for structured APIs, enterprise metadata fields, cos
 
 | Project | Fork? | Recommendation |
 |---|---:|---|
-| Cline | yes | already cloned; make it CertifyOS execution/IDE worker |
+| Cline | yes | already extended; use as local execution/IDE worker |
 | Gas Town | not initially | use adapter first; fork only for structured APIs/enterprise hooks |
 | Temporal | no | use stock Temporal Cloud/self-hosted |
 | Beads | no initially | mirror/export state; fork only if absolutely required |
