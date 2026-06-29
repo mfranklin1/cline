@@ -278,7 +278,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		backgroundEditEnabled: false,
 		doubleCheckCompletionEnabled: false,
 		lazyTeammateModeEnabled: false,
-		contextJanitorEnabled: false,
+		contextJanitorEnabled: true,
 		contextJanitorTriggerTokens: 64_000,
 		contextJanitorGrowthTriggerTokens: 20_000,
 		contextJanitorModelEndpoint: "http://127.0.0.1:4000",
