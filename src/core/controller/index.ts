@@ -889,6 +889,13 @@ export class Controller {
 		const doubleCheckCompletionEnabled = this.stateManager.getGlobalSettingsKey("doubleCheckCompletionEnabled")
 		const lazyTeammateModeEnabled = this.stateManager.getGlobalSettingsKey("lazyTeammateModeEnabled")
 		const showFeatureTips = this.stateManager.getGlobalSettingsKey("showFeatureTips")
+		const contextJanitorEnabled = this.stateManager.getGlobalSettingsKey("contextJanitorEnabled")
+		const contextJanitorTriggerTokens = this.stateManager.getGlobalSettingsKey("contextJanitorTriggerTokens")
+		const contextJanitorGrowthTriggerTokens = this.stateManager.getGlobalSettingsKey("contextJanitorGrowthTriggerTokens")
+		const contextJanitorModelEndpoint = this.stateManager.getGlobalSettingsKey("contextJanitorModelEndpoint")
+		const contextJanitorModelId = this.stateManager.getGlobalSettingsKey("contextJanitorModelId")
+		const contextJanitorMaxLatencyMs = this.stateManager.getGlobalSettingsKey("contextJanitorMaxLatencyMs")
+		const contextJanitorHeadroomEnabled = this.stateManager.getGlobalSettingsKey("contextJanitorHeadroomEnabled")
 
 		const localClineRulesToggles = this.stateManager.getWorkspaceStateKey("localClineRulesToggles")
 		const localWindsurfRulesToggles = this.stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -1004,6 +1011,13 @@ export class Controller {
 			banners,
 			welcomeBanners,
 			openAiCodexIsAuthenticated,
+			contextJanitorEnabled,
+			contextJanitorTriggerTokens,
+			contextJanitorGrowthTriggerTokens,
+			contextJanitorModelEndpoint,
+			contextJanitorModelId,
+			contextJanitorMaxLatencyMs,
+			contextJanitorHeadroomEnabled,
 		}
 	}
 
