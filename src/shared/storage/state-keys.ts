@@ -278,6 +278,15 @@ const USER_SETTINGS_FIELDS = {
 	lazyTeammateModeEnabled: { default: false as boolean },
 	showFeatureTips: { default: true as boolean },
 
+	// Context Janitor — local-model-driven context curation (see src/core/context/janitor/)
+	contextJanitorEnabled: { default: false as boolean },
+	contextJanitorTriggerTokens: { default: 64_000 as number },
+	contextJanitorGrowthTriggerTokens: { default: 20_000 as number },
+	contextJanitorModelEndpoint: { default: "http://127.0.0.1:4000" as string },
+	contextJanitorModelId: { default: "local-long" as string },
+	contextJanitorMaxLatencyMs: { default: 45_000 as number },
+	contextJanitorHeadroomEnabled: { default: true as boolean },
+
 	// OpenTelemetry configuration
 	openTelemetryEnabled: { default: true as boolean },
 	openTelemetryMetricsExporter: { default: undefined as string | undefined },

@@ -19,6 +19,7 @@ import {
 	getLocalWindsurfRules,
 	refreshExternalRulesToggles,
 } from "@core/context/instructions/user-instructions/external-rules"
+import { ContextJanitorService, DEFAULT_JANITOR_SETTINGS } from "@core/context/janitor"
 import { sendPartialMessageEvent } from "@core/controller/ui/subscribeToPartialMessage"
 import { getHookModelContext } from "@core/hooks/hook-model-context"
 import { getHooksEnabledSafe } from "@core/hooks/hooks-utils"
@@ -270,6 +271,7 @@ export class Task {
 	private readonly remoteWorkspaceDetectionPromise: Promise<void>
 	private readonly presentationScheduler: TaskPresentationScheduler
 	private readonly presentationSchedulingDisabled = isPresentationSchedulingDisabled()
+	private contextJanitorService: ContextJanitorService | undefined
 
 	constructor(params: TaskParams) {
 		const {
@@ -383,6 +385,31 @@ export class Task {
 		this.fileContextTracker = new FileContextTracker(controller, this.taskId)
 		this.modelContextTracker = new ModelContextTracker(this.taskId)
 		this.environmentContextTracker = new EnvironmentContextTracker(this.taskId)
+
+		// Initialize Context Janitor if enabled or headroom is on.
+		const janitorEnabled = this.stateManager.getGlobalSettingsKey("contextJanitorEnabled")
+		const headroomEnabled = this.stateManager.getGlobalSettingsKey("contextJanitorHeadroomEnabled") ?? true
+		if (janitorEnabled || headroomEnabled) {
+			const janitorSettings = {
+				...DEFAULT_JANITOR_SETTINGS,
+				enabled: !!janitorEnabled,
+				headroomEnabled: !!headroomEnabled,
+				triggerTokens:
+					this.stateManager.getGlobalSettingsKey("contextJanitorTriggerTokens") ??
+					DEFAULT_JANITOR_SETTINGS.triggerTokens,
+				growthTriggerTokens:
+					this.stateManager.getGlobalSettingsKey("contextJanitorGrowthTriggerTokens") ??
+					DEFAULT_JANITOR_SETTINGS.growthTriggerTokens,
+				modelEndpoint:
+					this.stateManager.getGlobalSettingsKey("contextJanitorModelEndpoint") ??
+					DEFAULT_JANITOR_SETTINGS.modelEndpoint,
+				modelId: this.stateManager.getGlobalSettingsKey("contextJanitorModelId") ?? DEFAULT_JANITOR_SETTINGS.modelId,
+				maxLatencyMs:
+					this.stateManager.getGlobalSettingsKey("contextJanitorMaxLatencyMs") ?? DEFAULT_JANITOR_SETTINGS.maxLatencyMs,
+			}
+			const storageDir = path.join(HostProvider.get().globalStorageFsPath, "janitor")
+			this.contextJanitorService = new ContextJanitorService(janitorSettings, this.taskId, storageDir)
+		}
 
 		// Initialize focus chain manager only if enabled
 		const focusChainSettings = this.stateManager.getGlobalSettingsKey("focusChainSettings")
@@ -2017,8 +2044,24 @@ export class Task {
 			// saves task history item which we use to keep track of conversation history deleted range
 		}
 
+		// Context Janitor: curate conversation history when enabled.
+		// Falls back to truncatedConversationHistory if janitor is disabled or fails.
+		let messagesForApi = contextManagementMetadata.truncatedConversationHistory
+		if (this.contextJanitorService) {
+			try {
+				const janitorResult = await this.contextJanitorService.maybeRunJanitor(
+					messagesForApi as Parameters<ContextJanitorService["maybeRunJanitor"]>[0],
+				)
+				if (janitorResult) {
+					messagesForApi = janitorResult.curatedMessages as typeof messagesForApi
+				}
+			} catch (err) {
+				// Janitor errors must never block the API call.
+			}
+		}
+
 		// Response API requires native tool calls to be enabled
-		const stream = this.api.createMessage(systemPrompt, contextManagementMetadata.truncatedConversationHistory, tools)
+		const stream = this.api.createMessage(systemPrompt, messagesForApi, tools)
 
 		const iterator = stream[Symbol.asyncIterator]()
 

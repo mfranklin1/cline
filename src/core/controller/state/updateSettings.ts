@@ -352,6 +352,29 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 			controller.stateManager.setGlobalState("showFeatureTips", request.showFeatureTips)
 		}
 
+		// Context Janitor settings
+		if (request.contextJanitorEnabled !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorEnabled", request.contextJanitorEnabled)
+		}
+		if (request.contextJanitorTriggerTokens !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorTriggerTokens", request.contextJanitorTriggerTokens)
+		}
+		if (request.contextJanitorGrowthTriggerTokens !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorGrowthTriggerTokens", request.contextJanitorGrowthTriggerTokens)
+		}
+		if (request.contextJanitorModelEndpoint !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorModelEndpoint", request.contextJanitorModelEndpoint)
+		}
+		if (request.contextJanitorModelId !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorModelId", request.contextJanitorModelId)
+		}
+		if (request.contextJanitorMaxLatencyMs !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorMaxLatencyMs", request.contextJanitorMaxLatencyMs)
+		}
+		if (request.contextJanitorHeadroomEnabled !== undefined) {
+			controller.stateManager.setGlobalState("contextJanitorHeadroomEnabled", request.contextJanitorHeadroomEnabled)
+		}
+
 		// Post updated state to webview
 		await controller.postStateToWebview()
 
