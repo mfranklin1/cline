@@ -5,6 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import { useExtensionState } from "@/context/ExtensionStateContext"
+import { DebouncedTextField } from "../common/DebouncedTextField"
 import Section from "../Section"
 import SettingsSlider from "../SettingsSlider"
 import { updateSetting } from "../utils/settingsHandlers"
@@ -227,6 +228,13 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		doubleCheckCompletionEnabled,
 		lazyTeammateModeEnabled,
 		showFeatureTips,
+		contextJanitorEnabled,
+		contextJanitorHeadroomEnabled,
+		contextJanitorTriggerTokens,
+		contextJanitorGrowthTriggerTokens,
+		contextJanitorMaxLatencyMs,
+		contextJanitorModelEndpoint,
+		contextJanitorModelId,
 	} = useExtensionState()
 
 	const handleFocusChainIntervalChange = useCallback(
@@ -318,6 +326,82 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 									)}
 								</div>
 							))}
+						</div>
+					</div>
+
+					{/* Context Janitor */}
+					<div>
+						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+							Context Janitor
+						</div>
+						<div
+							className="relative p-3 pt-0 my-3 rounded-md border border-editor-widget-border/50"
+							id="context-janitor-features">
+							<FeatureRow
+								checked={contextJanitorEnabled}
+								description="Runs a local model before each API call to compress and curate conversation history, reducing token usage."
+								label="Context Janitor"
+								onChange={(checked) => updateSetting("contextJanitorEnabled", checked)}
+							/>
+							<FeatureRow
+								checked={contextJanitorHeadroomEnabled}
+								description="Always-on mechanical compression: deduplicates files and truncates install/test output without a model call."
+								label="Headroom Adapter"
+								onChange={(checked) => updateSetting("contextJanitorHeadroomEnabled", checked)}
+							/>
+							{contextJanitorEnabled && (
+								<div className="mt-3 space-y-4 border-t border-editor-widget-border/30 pt-3">
+									<div className="space-y-1">
+										<Label className="text-xs text-foreground/80">Model Endpoint</Label>
+										<p className="text-xs text-description mb-1">
+											OpenAI-compatible base URL (default: http://127.0.0.1:4000)
+										</p>
+										<DebouncedTextField
+											initialValue={contextJanitorModelEndpoint ?? "http://127.0.0.1:4000"}
+											onChange={(val) => updateSetting("contextJanitorModelEndpoint", val)}
+											placeholder="http://127.0.0.1:4000"
+										/>
+									</div>
+									<div className="space-y-1">
+										<Label className="text-xs text-foreground/80">Model ID</Label>
+										<p className="text-xs text-description mb-1">
+											Model alias sent to the endpoint (default: local-long)
+										</p>
+										<DebouncedTextField
+											initialValue={contextJanitorModelId ?? "local-long"}
+											onChange={(val) => updateSetting("contextJanitorModelId", val)}
+											placeholder="local-long"
+										/>
+									</div>
+									<SettingsSlider
+										label="Trigger Threshold (tokens)"
+										max={200000}
+										min={8000}
+										onChange={(val) => updateSetting("contextJanitorTriggerTokens", val)}
+										step={1000}
+										value={contextJanitorTriggerTokens ?? 64000}
+										valueWidth="w-16"
+									/>
+									<SettingsSlider
+										label="Growth Trigger (tokens)"
+										max={100000}
+										min={1000}
+										onChange={(val) => updateSetting("contextJanitorGrowthTriggerTokens", val)}
+										step={1000}
+										value={contextJanitorGrowthTriggerTokens ?? 20000}
+										valueWidth="w-16"
+									/>
+									<SettingsSlider
+										label="Max Latency (ms)"
+										max={120000}
+										min={5000}
+										onChange={(val) => updateSetting("contextJanitorMaxLatencyMs", val)}
+										step={1000}
+										value={contextJanitorMaxLatencyMs ?? 45000}
+										valueWidth="w-16"
+									/>
+								</div>
+							)}
 						</div>
 					</div>
 
