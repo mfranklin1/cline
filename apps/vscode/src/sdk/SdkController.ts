@@ -263,6 +263,7 @@ export class Controller {
 			},
 			shouldStopAfterModeSwitch: () => this.mode.hasPendingModeChange(),
 			onConsecutiveMistakeLimitReached: (context) => this.interactions.handleConsecutiveMistakeLimitReached(context),
+			globalStorageDir: this.context.globalStorageUri.fsPath,
 		})
 		this.interactions = new SdkInteractionCoordinator({
 			messages: this.messages,

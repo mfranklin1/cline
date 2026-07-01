@@ -1,0 +1,110 @@
+// ============================================================================
+// Context Janitor — shared types
+// Runs BEFORE api.createMessage() to curate conversation history using the
+// local-long (128k context) model via MacM4LocalAgent's LiteLLM proxy.
+// ============================================================================
+
+export type JanitorAction = "keep" | "summarize" | "archive" | "discard"
+
+export interface JanitorDecision {
+	messageIndex: number
+	action: JanitorAction
+	reason: string // terse, ≤80 chars
+	confidence: number // 0.0–1.0
+	summary?: string // populated only when action === 'summarize'
+	checkpointHash?: string
+}
+
+// Inviolable rules enforced regardless of model output.
+export const JANITOR_INVIOLABLE_RULES = {
+	NEVER_DISCARD_USER: "Never discard or summarize a human turn",
+	NEVER_DISCARD_ERRORS: "Never discard messages containing active errors or tracebacks",
+	NEVER_DISCARD_DIFFS: "Never discard messages containing active file diffs",
+	NEVER_DISCARD_OPEN_TASKS: "Never discard messages referencing open or incomplete tasks",
+	NEVER_DISCARD_CONSTRAINTS: "Never discard explicit user constraints or instructions",
+} as const
+
+export interface LedgerEntry {
+	id: string // ulid-style: timestamp-random
+	taskId: string
+	timestamp: string // ISO-8601
+	rawTokens: number
+	curatedTokens: number
+	messagesProcessed: number
+	decisions: JanitorDecision[]
+	checkpointHash?: string
+	backendSwitchAvoided: boolean
+}
+
+export interface ActiveContextPack {
+	taskGoal: string
+	keyConstraints: string[]
+	activeErrors: string[]
+	activeDiffs: string[]
+	openTasks: string[]
+	recentDecisions: string[]
+	lastUpdated: string // ISO-8601
+}
+
+// Minimal message shape compatible with Anthropic SDK and Cline's internal types.
+export interface JanitorMessage {
+	role: "user" | "assistant"
+	content:
+		| string
+		| Array<{
+				type: string
+				text?: string
+				content?: string | Array<{ type: string; text?: string }>
+				[key: string]: unknown
+		  }>
+}
+
+export interface JanitorRunResult {
+	curatedMessages: JanitorMessage[]
+	activeContextPack: ActiveContextPack
+	rawTokensBefore: number
+	curatedTokensAfter: number
+	backendSwitchAvoided: boolean
+	ledgerEntryId: string
+}
+
+export interface JanitorSettings {
+	enabled: boolean
+	triggerTokens: number
+	growthTriggerTokens: number
+	modelEndpoint: string
+	modelId: string
+	maxLatencyMs: number
+	headroomEnabled: boolean
+}
+
+export const DEFAULT_JANITOR_SETTINGS: JanitorSettings = {
+	enabled: false,
+	triggerTokens: 64_000,
+	growthTriggerTokens: 20_000,
+	modelEndpoint: "http://127.0.0.1:4000",
+	modelId: "local-long",
+	maxLatencyMs: 45_000,
+	headroomEnabled: true,
+}
+
+// Error keywords used to enforce NEVER_DISCARD_ERRORS.
+export const ERROR_KEYWORDS = [
+	"error",
+	"Error",
+	"traceback",
+	"Traceback",
+	"exception",
+	"Exception",
+	"failed",
+	"Failed",
+	"FAILED",
+	"fatal",
+	"Fatal",
+	"FATAL",
+	"panic",
+	"Panic",
+]
+
+// Diff markers used to enforce NEVER_DISCARD_DIFFS.
+export const DIFF_MARKERS = ["--- a/", "+++ b/", "@@ ", "diff --git"]

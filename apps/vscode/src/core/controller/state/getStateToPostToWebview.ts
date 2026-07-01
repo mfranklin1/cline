@@ -69,6 +69,13 @@ export async function getStateToPostToWebview(controller: {
 	const lastDismissedCliBannerVersion = stateManager.getGlobalStateKey("lastDismissedCliBannerVersion") || 0
 	const dismissedBanners = stateManager.getGlobalStateKey("dismissedBanners")
 	const showFeatureTips = stateManager.getGlobalSettingsKey("showFeatureTips")
+	const contextJanitorEnabled = stateManager.getGlobalSettingsKey("contextJanitorEnabled")
+	const contextJanitorTriggerTokens = stateManager.getGlobalSettingsKey("contextJanitorTriggerTokens")
+	const contextJanitorGrowthTriggerTokens = stateManager.getGlobalSettingsKey("contextJanitorGrowthTriggerTokens")
+	const contextJanitorModelEndpoint = stateManager.getGlobalSettingsKey("contextJanitorModelEndpoint")
+	const contextJanitorModelId = stateManager.getGlobalSettingsKey("contextJanitorModelId")
+	const contextJanitorMaxLatencyMs = stateManager.getGlobalSettingsKey("contextJanitorMaxLatencyMs")
+	const contextJanitorHeadroomEnabled = stateManager.getGlobalSettingsKey("contextJanitorHeadroomEnabled")
 
 	const localClineRulesToggles = stateManager.getWorkspaceStateKey("localClineRulesToggles")
 	const localWindsurfRulesToggles = stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -177,5 +184,12 @@ export async function getStateToPostToWebview(controller: {
 		banners,
 		welcomeBanners,
 		openAiCodexIsAuthenticated,
+		contextJanitorEnabled,
+		contextJanitorTriggerTokens,
+		contextJanitorGrowthTriggerTokens,
+		contextJanitorModelEndpoint,
+		contextJanitorModelId,
+		contextJanitorMaxLatencyMs,
+		contextJanitorHeadroomEnabled,
 	} as ExtensionState
 }

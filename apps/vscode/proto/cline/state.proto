@@ -112,9 +112,6 @@ message Secrets {
 // in src/shared/storage/state-keys.ts and use the scripts/generate-state-proto.mjs
 // script to regenerate this list.
 message Settings {
-  reserved 144, 154, 176;
-  reserved "cline_web_tools_enabled", "enable_parallel_tool_calling", "double_check_completion_enabled";
-
   optional string lite_llm_base_url = 1;
   optional bool lite_llm_use_prompt_cache = 2;
   optional string anthropic_base_url = 4;
@@ -237,8 +234,8 @@ message Settings {
   optional string act_mode_nous_research_model_id = 121;
   optional string act_mode_vercel_ai_gateway_model_id = 122;
   optional OpenRouterModelInfo act_mode_vercel_ai_gateway_model_info = 123;
-  optional string plan_mode_api_provider = 124;
-  optional string act_mode_api_provider = 125;
+  optional ApiProvider plan_mode_api_provider = 124;
+  optional ApiProvider act_mode_api_provider = 125;
   optional string hicap_model_id = 126;
   optional string lm_studio_model_id = 127;
   optional AutoApprovalSettings auto_approval_settings = 128;
@@ -284,6 +281,17 @@ message Settings {
   optional string act_mode_cline_model_id = 180;
   optional OpenRouterModelInfo act_mode_cline_model_info = 181;
   optional bool show_feature_tips = 182;
+  optional bool context_janitor_enabled = 184;
+  optional int32 context_janitor_trigger_tokens = 185;
+  optional int32 context_janitor_growth_trigger_tokens = 186;
+  optional string context_janitor_model_endpoint = 187;
+  optional string context_janitor_model_id = 188;
+  optional int32 context_janitor_max_latency_ms = 189;
+  optional bool context_janitor_headroom_enabled = 190;
+  optional string plan_mode_cline_pass_model_id = 191;
+  optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 192;
+  optional string act_mode_cline_pass_model_id = 193;
+  optional OpenRouterModelInfo act_mode_cline_pass_model_info = 194;
 }
 
 message State {
@@ -425,6 +433,13 @@ message UpdateSettingsRequest {
   optional bool opt_out_of_remote_config = 39;
   optional bool worktrees_enabled = 40;
   optional bool show_feature_tips = 42;
+  optional bool context_janitor_enabled = 44;
+  optional int64 context_janitor_trigger_tokens = 45;
+  optional int64 context_janitor_growth_trigger_tokens = 46;
+  optional string context_janitor_model_endpoint = 47;
+  optional string context_janitor_model_id = 48;
+  optional int64 context_janitor_max_latency_ms = 49;
+  optional bool context_janitor_headroom_enabled = 50;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {

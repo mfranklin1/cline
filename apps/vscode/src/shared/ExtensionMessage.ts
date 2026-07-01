@@ -132,6 +132,13 @@ export interface ExtensionState {
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
+	contextJanitorEnabled?: boolean
+	contextJanitorTriggerTokens?: number
+	contextJanitorGrowthTriggerTokens?: number
+	contextJanitorModelEndpoint?: string
+	contextJanitorModelId?: string
+	contextJanitorMaxLatencyMs?: number
+	contextJanitorHeadroomEnabled?: boolean
 }
 
 /**

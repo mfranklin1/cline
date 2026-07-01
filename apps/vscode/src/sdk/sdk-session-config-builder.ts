@@ -1,5 +1,6 @@
 import type { CoreSessionConfig } from "@cline/core"
 import { type AgentTool, createTool } from "@cline/shared"
+import { createJanitorBeforeModelHook } from "@/core/context/janitor/janitor-hook"
 import type { StateManager } from "@/core/storage/StateManager"
 import { buildSessionConfig, type SessionConfigInput } from "./cline-session-factory"
 import { buildAgentHooks, type HookMessageEmitter } from "./hooks-adapter"
@@ -10,6 +11,7 @@ export interface SdkSessionConfigBuilderOptions {
 	onSwitchToActMode: () => void
 	shouldStopAfterModeSwitch?: () => boolean
 	onConsecutiveMistakeLimitReached?: CoreSessionConfig["onConsecutiveMistakeLimitReached"]
+	globalStorageDir?: string
 }
 
 export class SdkSessionConfigBuilder {
@@ -22,6 +24,9 @@ export class SdkSessionConfigBuilder {
 		}
 
 		const baseHooks = buildAgentHooks(this.options.stateManager, this.options.emitHookMessage)
+		const janitorHook = this.options.globalStorageDir
+			? createJanitorBeforeModelHook(this.options.stateManager, this.options.globalStorageDir)
+			: undefined
 		config.hooks = {
 			...baseHooks,
 			beforeModel: async (ctx) => {
@@ -30,6 +35,16 @@ export class SdkSessionConfigBuilder {
 					return {
 						...baseControl,
 						stop: true,
+					}
+				}
+				// Run Context Janitor to curate messages before the model call.
+				if (janitorHook) {
+					const janitorResult = await janitorHook(ctx)
+					if (janitorResult?.messages) {
+						return {
+							...baseControl,
+							messages: janitorResult.messages,
+						}
 					}
 				}
 				return baseControl
