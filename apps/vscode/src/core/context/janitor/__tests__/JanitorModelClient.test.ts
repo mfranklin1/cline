@@ -3,6 +3,8 @@ import { mockFetchForTesting } from "@/shared/net"
 import { JanitorModelClient } from "../JanitorModelClient"
 import { ActiveContextPack, DEFAULT_JANITOR_SETTINGS, JanitorDecision, JanitorMessage } from "../types"
 
+type MockFetch = Parameters<typeof mockFetchForTesting>[0]
+
 function makeMsg(role: "user" | "assistant", content: string): JanitorMessage {
 	return { role, content }
 }
@@ -19,13 +21,13 @@ function makePack(): ActiveContextPack {
 	}
 }
 
-function mockOkResponse(decisions: JanitorDecision[]): typeof globalThis.fetch {
+function mockOkResponse(decisions: JanitorDecision[]): MockFetch {
 	const body = JSON.stringify({ decisions })
-	return async () =>
+	return (async () =>
 		({
 			ok: true,
 			json: async () => ({ choices: [{ message: { content: body } }] }),
-		}) as Response
+		}) as Response) as unknown as MockFetch
 }
 
 describe("JanitorModelClient", () => {
@@ -61,11 +63,11 @@ describe("JanitorModelClient", () => {
 		it("returns empty array when model response has no choices", async () => {
 			const client = new JanitorModelClient(settings)
 			const messages = [makeMsg("user", "hello")]
-			const emptyChoices: typeof globalThis.fetch = async () =>
+			const emptyChoices: MockFetch = (async () =>
 				({
 					ok: true,
 					json: async () => ({ choices: [] }),
-				}) as Response
+				}) as Response) as unknown as MockFetch
 
 			await mockFetchForTesting(emptyChoices, async () => {
 				const result = await client.getCleanupDecisions(messages, makePack(), 5_000)
@@ -76,7 +78,7 @@ describe("JanitorModelClient", () => {
 		it("returns empty array when model returns non-ok HTTP status", async () => {
 			const client = new JanitorModelClient(settings)
 			const messages = [makeMsg("user", "hello")]
-			const failFetch: typeof globalThis.fetch = async () => ({ ok: false, status: 503 }) as Response
+			const failFetch: MockFetch = (async () => ({ ok: false, status: 503 }) as Response) as unknown as MockFetch
 
 			await mockFetchForTesting(failFetch, async () => {
 				const result = await client.getCleanupDecisions(messages, makePack(), 5_000)
@@ -87,11 +89,11 @@ describe("JanitorModelClient", () => {
 		it("returns empty array when model response content is invalid JSON", async () => {
 			const client = new JanitorModelClient(settings)
 			const messages = [makeMsg("user", "hello")]
-			const badJson: typeof globalThis.fetch = async () =>
+			const badJson: MockFetch = (async () =>
 				({
 					ok: true,
 					json: async () => ({ choices: [{ message: { content: "not json {{{{" } }] }),
-				}) as Response
+				}) as Response) as unknown as MockFetch
 
 			await mockFetchForTesting(badJson, async () => {
 				const result = await client.getCleanupDecisions(messages, makePack(), 5_000)
@@ -102,11 +104,11 @@ describe("JanitorModelClient", () => {
 		it("returns empty array when model response is missing decisions field", async () => {
 			const client = new JanitorModelClient(settings)
 			const messages = [makeMsg("user", "hello")]
-			const missingDecisions: typeof globalThis.fetch = async () =>
+			const missingDecisions: MockFetch = (async () =>
 				({
 					ok: true,
 					json: async () => ({ choices: [{ message: { content: '{"other": "data"}' } }] }),
-				}) as Response
+				}) as Response) as unknown as MockFetch
 
 			await mockFetchForTesting(missingDecisions, async () => {
 				const result = await client.getCleanupDecisions(messages, makePack(), 5_000)
@@ -119,11 +121,11 @@ describe("JanitorModelClient", () => {
 			const fencedContent = `\`\`\`json\n${JSON.stringify({ decisions })}\n\`\`\``
 			const client = new JanitorModelClient(settings)
 			const messages = [makeMsg("user", "hello")]
-			const fencedFetch: typeof globalThis.fetch = async () =>
+			const fencedFetch: MockFetch = (async () =>
 				({
 					ok: true,
 					json: async () => ({ choices: [{ message: { content: fencedContent } }] }),
-				}) as Response
+				}) as Response) as unknown as MockFetch
 
 			await mockFetchForTesting(fencedFetch, async () => {
 				const result = await client.getCleanupDecisions(messages, makePack(), 5_000)
