@@ -132,6 +132,7 @@ export interface ExtensionState {
 	banners?: BannerCardData[]
 	welcomeBanners?: BannerCardData[]
 	openAiCodexIsAuthenticated?: boolean
+	claudeEscalationModel?: string
 	contextJanitorEnabled?: boolean
 	contextJanitorTriggerTokens?: number
 	contextJanitorGrowthTriggerTokens?: number

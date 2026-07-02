@@ -292,6 +292,7 @@ message Settings {
   optional OpenRouterModelInfo plan_mode_cline_pass_model_info = 192;
   optional string act_mode_cline_pass_model_id = 193;
   optional OpenRouterModelInfo act_mode_cline_pass_model_info = 194;
+  optional string claude_escalation_model = 195;
 }
 
 message State {
@@ -440,6 +441,12 @@ message UpdateSettingsRequest {
   optional string context_janitor_model_id = 48;
   optional int64 context_janitor_max_latency_ms = 49;
   optional bool context_janitor_headroom_enabled = 50;
+  // Claude escalation tier for the local proxy stack (haiku|sonnet|opus|fable).
+  optional string claude_escalation_model = 51;
+  // TRANSIENT: written to the macOS keychain (service "anthropic-api-key",
+  // the same item ~/.claude/set-anthropic-env.sh reads) and NEVER persisted
+  // in extension state. Empty string is ignored.
+  optional string anthropic_escalation_api_key = 52;
 }
 
 message UpdateTerminalConnectionTimeoutRequest {
