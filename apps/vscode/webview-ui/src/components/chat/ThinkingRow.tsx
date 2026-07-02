@@ -1,4 +1,4 @@
-import { ChevronDownIcon, ChevronRightIcon } from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, LoaderCircleIcon } from "lucide-react"
 import { memo, useCallback, useEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
@@ -69,6 +69,10 @@ export const ThinkingRow = memo(
 						onClick={onToggle}
 						size="icon"
 						variant="icon">
+						{/* Spinner while a turn is in flight (request pending / reasoning
+						    streaming). Complements the shimmer text so a slow local model's
+						    multi-minute wait reads unambiguously as "actively running". */}
+						{isStreaming && <LoaderCircleIcon className="size-2 mr-1 animate-spin shrink-0 text-description" />}
 						<span
 							className={cn("text-[13px] leading-[1.2]", {
 								"animate-shimmer bg-linear-90 from-foreground to-description bg-[length:200%_100%] bg-clip-text text-transparent":

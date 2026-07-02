@@ -889,7 +889,13 @@ export const ChatRowContent = memo(
 									reasoningContent={message.text}
 									showChevron={!isReasoningStreaming || hasReasoningText}
 									showTitle={true}
-									title={isReasoningStreaming ? "Thinking..." : "Thinking"}
+									title={
+										isReasoningStreaming
+											? hasReasoningText
+												? "Thinking..."
+												: "Analysing request..."
+											: "Thinking"
+									}
 								/>
 								{isReasoningStreaming && showFeatureTips !== false && <FeatureTip />}
 							</div>
