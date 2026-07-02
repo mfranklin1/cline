@@ -153,6 +153,26 @@ export class ContextJanitorService {
 		this.settings = { ...this.settings, ...settings }
 	}
 
+	// When the model janitor doesn't run, headroom compression must still reach
+	// the caller — returning null here would discard it (the caller falls back
+	// to the original messages).
+	private headroomOnlyResult(compressedMessages: JanitorMessage[], rawTokensBefore: number): JanitorRunResult | null {
+		if (!this.settings.headroomEnabled) {
+			return null
+		}
+		const curatedTokensAfter = this.budgeter.estimateTokens(compressedMessages)
+		if (curatedTokensAfter >= rawTokensBefore) {
+			return null
+		}
+		return {
+			curatedMessages: compressedMessages,
+			rawTokensBefore,
+			curatedTokensAfter,
+			backendSwitchAvoided: false,
+			headroomOnly: true,
+		}
+	}
+
 	async maybeRunJanitor(messages: JanitorMessage[]): Promise<JanitorRunResult | null> {
 		// Step 1: HeadroomAdapter — mechanical compression, always run if headroomEnabled.
 		const compressedMessages = this.settings.headroomEnabled ? this.headroomAdapter.compress(messages) : messages
@@ -161,9 +181,7 @@ export class ContextJanitorService {
 
 		// Step 2: Check if full janitor (model call) should run.
 		if (!this.settings.enabled || !this.budgeter.shouldRunJanitor(compressedMessages, this.settings)) {
-			// Headroom-only: return null (caller uses original or uses compressedMessages separately).
-			// We return null here to signal "no full janitor run" — headroom is transparent.
-			return null
+			return this.headroomOnlyResult(compressedMessages, rawTokensBefore)
 		}
 
 		// Step 3: Load existing active context pack.
@@ -173,9 +191,10 @@ export class ContextJanitorService {
 		// Step 4: Get semantic decisions from local model.
 		const decisions = await this.modelClient.getCleanupDecisions(compressedMessages, contextPack, this.settings.maxLatencyMs)
 
-		// If model returned nothing (timeout/error), bail out safely.
+		// If model returned nothing (timeout/error), bail out safely —
+		// but still surface headroom's mechanical compression.
 		if (decisions.length === 0) {
-			return null
+			return this.headroomOnlyResult(compressedMessages, rawTokensBefore)
 		}
 
 		// Step 5: Apply decisions with inviolable rule enforcement.

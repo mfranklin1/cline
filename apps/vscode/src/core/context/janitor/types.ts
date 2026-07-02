@@ -61,11 +61,14 @@ export interface JanitorMessage {
 
 export interface JanitorRunResult {
 	curatedMessages: JanitorMessage[]
-	activeContextPack: ActiveContextPack
 	rawTokensBefore: number
 	curatedTokensAfter: number
 	backendSwitchAvoided: boolean
-	ledgerEntryId: string
+	/** True when only HeadroomAdapter compression ran (no model call, no ledger entry). */
+	headroomOnly?: boolean
+	// Absent on headroom-only runs — the model janitor did not execute.
+	activeContextPack?: ActiveContextPack
+	ledgerEntryId?: string
 }
 
 export interface JanitorSettings {
