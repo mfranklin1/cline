@@ -21,6 +21,21 @@ describe("ThinkingRow", () => {
 		expect(screen.getByText("Inspecting files...")).toBeInTheDocument()
 	})
 
+	it("shows a spinner while streaming (request pending / reasoning)", () => {
+		const { container } = render(
+			<ThinkingRow isExpanded={false} isStreaming={true} isVisible={true} showTitle={true} title="Analysing request..." />,
+		)
+		expect(screen.getByText("Analysing request...")).toBeInTheDocument()
+		expect(container.querySelector(".animate-spin")).toBeInTheDocument()
+	})
+
+	it("hides the spinner when not streaming", () => {
+		const { container } = render(
+			<ThinkingRow isExpanded={false} isStreaming={false} isVisible={true} showTitle={true} title="Thinking" />,
+		)
+		expect(container.querySelector(".animate-spin")).not.toBeInTheDocument()
+	})
+
 	it("calls onToggle when header is clicked", () => {
 		const onToggle = vi.fn()
 
