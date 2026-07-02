@@ -318,6 +318,7 @@ export const ExtensionStateContextProvider: React.FC<{
 		contextJanitorModelEndpoint: "http://127.0.0.1:4000",
 		contextJanitorModelId: "local-long",
 		contextJanitorMaxLatencyMs: 45_000,
+		claudeEscalationModel: "haiku",
 		contextJanitorHeadroomEnabled: true,
 		showFeatureTips: true,
 		globalSkillsToggles: {},

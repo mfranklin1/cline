@@ -76,6 +76,7 @@ export async function getStateToPostToWebview(controller: {
 	const contextJanitorModelId = stateManager.getGlobalSettingsKey("contextJanitorModelId")
 	const contextJanitorMaxLatencyMs = stateManager.getGlobalSettingsKey("contextJanitorMaxLatencyMs")
 	const contextJanitorHeadroomEnabled = stateManager.getGlobalSettingsKey("contextJanitorHeadroomEnabled")
+	const claudeEscalationModel = stateManager.getGlobalSettingsKey("claudeEscalationModel")
 
 	const localClineRulesToggles = stateManager.getWorkspaceStateKey("localClineRulesToggles")
 	const localWindsurfRulesToggles = stateManager.getWorkspaceStateKey("localWindsurfRulesToggles")
@@ -191,5 +192,6 @@ export async function getStateToPostToWebview(controller: {
 		contextJanitorModelId,
 		contextJanitorMaxLatencyMs,
 		contextJanitorHeadroomEnabled,
+		claudeEscalationModel,
 	} as ExtensionState
 }

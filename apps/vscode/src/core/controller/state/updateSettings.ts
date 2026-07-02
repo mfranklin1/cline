@@ -3,6 +3,7 @@ import { PlanActMode, McpDisplayMode as ProtoMcpDisplayMode, UpdateSettingsReque
 import { convertProtoToApiProvider } from "@shared/proto-conversions/models/api-configuration-conversion"
 import { OpenaiReasoningEffort } from "@shared/storage/types"
 import { TelemetrySetting } from "@shared/TelemetrySetting"
+import { execFile } from "child_process"
 import { ClineEnv } from "@/config"
 import { fetchRemoteConfig } from "@/core/storage/remote-config/fetch"
 import { clearRemoteConfig } from "@/core/storage/remote-config/utils"
@@ -286,6 +287,56 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 		if (request.contextJanitorHeadroomEnabled !== undefined) {
 			controller.stateManager.setGlobalState("contextJanitorHeadroomEnabled", request.contextJanitorHeadroomEnabled)
+		}
+
+		if (request.claudeEscalationModel !== undefined) {
+			const choice = ["haiku", "sonnet", "opus", "fable"].includes(request.claudeEscalationModel)
+				? request.claudeEscalationModel
+				: "haiku"
+			controller.stateManager.setGlobalState("claudeEscalationModel", choice)
+			// Write-through: the local proxy reads the choice from the
+			// x-claude-escalation-model header on every request. openAiHeaders
+			// already flows into the OpenAI-compatible provider's HTTP headers,
+			// so merging here needs no provider changes. User-defined custom
+			// headers are preserved.
+			const currentHeaders = controller.stateManager.getGlobalSettingsKey("openAiHeaders") ?? {}
+			controller.stateManager.setGlobalState("openAiHeaders", {
+				...currentHeaders,
+				"x-claude-escalation-model": choice,
+			})
+		}
+
+		if (request.anthropicEscalationApiKey !== undefined && request.anthropicEscalationApiKey.length > 0) {
+			// TRANSIENT: persist to the macOS keychain (the single source of
+			// truth shared with ~/.claude/set-anthropic-env.sh and the local
+			// proxy) and never into extension state. execFile with an args
+			// array -- the key is never interpolated into a shell string.
+			if (process.platform === "darwin") {
+				const user = process.env.USER ?? ""
+				await new Promise<void>((resolve) => {
+					execFile(
+						"security",
+						[
+							"add-generic-password",
+							"-U",
+							"-a",
+							user,
+							"-s",
+							"anthropic-api-key",
+							"-w",
+							request.anthropicEscalationApiKey ?? "",
+						],
+						(error) => {
+							if (error) {
+								Logger.error(`Failed to store Anthropic API key in keychain: ${error.message}`)
+							}
+							resolve()
+						},
+					)
+				})
+			} else {
+				Logger.error("Anthropic escalation API key storage is only supported on macOS (keychain)")
+			}
 		}
 
 		// Post updated state to webview

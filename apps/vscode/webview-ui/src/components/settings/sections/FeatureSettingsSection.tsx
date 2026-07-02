@@ -1,5 +1,7 @@
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
-import { memo, type ReactNode } from "react"
+import { memo, type ReactNode, useState } from "react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
@@ -167,6 +169,7 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		contextJanitorMaxLatencyMs,
 		contextJanitorModelEndpoint,
 		contextJanitorModelId,
+		claudeEscalationModel,
 	} = useExtensionState()
 
 	const isYoloRemoteLocked = remoteConfigSettings?.yoloModeToggled !== undefined
@@ -305,6 +308,47 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 						</div>
 					</div>
 
+					{/* Claude Escalation (MacM4LocalAgent proxy stack) */}
+					<div>
+						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">
+							Claude Escalation
+						</div>
+						<div
+							className="relative p-3 my-3 rounded-md border border-editor-widget-border/50"
+							id="claude-escalation-features">
+							<div className="space-y-1">
+								<Label className="text-xs text-foreground/80">Escalation Model</Label>
+								<p className="text-xs text-description mb-1">
+									Claude model used when the local router escalates complex tasks. Haiku rides the Claude
+									subscription at no extra cost; Sonnet / Opus / Fable are billed to your Anthropic API key.
+								</p>
+								<Select
+									onValueChange={(v) => updateSetting("claudeEscalationModel", v)}
+									value={claudeEscalationModel ?? "haiku"}>
+									<SelectTrigger className="w-full">
+										<SelectValue />
+									</SelectTrigger>
+									<SelectContent>
+										<SelectItem value="haiku">Haiku 4.5 — subscription, 200K context</SelectItem>
+										<SelectItem value="sonnet">Sonnet 5 — API key, 1M context</SelectItem>
+										<SelectItem value="opus">Opus 4.8 — API key, 1M context</SelectItem>
+										<SelectItem value="fable">Fable 5 — API key, 1M context</SelectItem>
+									</SelectContent>
+								</Select>
+							</div>
+							{claudeEscalationModel && claudeEscalationModel !== "haiku" && (
+								<div className="mt-3 space-y-1 border-t border-editor-widget-border/30 pt-3">
+									<Label className="text-xs text-foreground/80">Anthropic API Key</Label>
+									<p className="text-xs text-description mb-1">
+										Saved to the macOS Keychain (item "anthropic-api-key") and read by the local proxy — never
+										stored in VS Code. Leave blank to keep the existing key.
+									</p>
+									<AnthropicKeychainKeyField />
+								</div>
+							)}
+						</div>
+					</div>
+
 					{/* Editor features */}
 					<div>
 						<div className="text-xs font-medium text-foreground/80 uppercase tracking-wider mb-3">Editor</div>
@@ -385,4 +429,38 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 		</div>
 	)
 }
+/**
+ * Password-style input + explicit save button for the Anthropic API key.
+ * The value is sent once via the transient anthropicEscalationApiKey
+ * UpdateSettings field (written to the macOS Keychain host-side) and the
+ * local input is cleared -- the key is never kept in webview state.
+ */
+const AnthropicKeychainKeyField = () => {
+	const [pendingKey, setPendingKey] = useState("")
+	const [saved, setSaved] = useState(false)
+	const save = () => {
+		if (!pendingKey.trim()) {
+			return
+		}
+		updateSetting("anthropicEscalationApiKey", pendingKey.trim())
+		setPendingKey("")
+		setSaved(true)
+		setTimeout(() => setSaved(false), 3000)
+	}
+	return (
+		<div className="flex gap-2 items-center">
+			<Input
+				className="flex-1"
+				onChange={(e) => setPendingKey(e.target.value)}
+				placeholder="sk-ant-..."
+				type="password"
+				value={pendingKey}
+			/>
+			<Button disabled={!pendingKey.trim()} onClick={save} size="sm" variant="secondary">
+				{saved ? "Saved ✓" : "Save to Keychain"}
+			</Button>
+		</div>
+	)
+}
+
 export default memo(FeatureSettingsSection)

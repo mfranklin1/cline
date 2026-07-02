@@ -283,6 +283,14 @@ const USER_SETTINGS_FIELDS = {
 	contextJanitorMaxLatencyMs: { default: 45_000 as number },
 	contextJanitorHeadroomEnabled: { default: true as boolean },
 
+	// Claude escalation tier for the local proxy stack (MacM4LocalAgent).
+	// "haiku" rides the Claude subscription (the only model its OAuth token
+	// may call on the raw API); sonnet/opus/fable require the Anthropic API
+	// key in the macOS keychain (item "anthropic-api-key") and are metered.
+	// Sent to the proxy as the x-claude-escalation-model header via
+	// openAiHeaders write-through in updateSettings.
+	claudeEscalationModel: { default: "haiku" as string },
+
 	// OpenTelemetry configuration
 	openTelemetryEnabled: { default: true as boolean },
 	openTelemetryMetricsExporter: { default: undefined as string | undefined },
