@@ -169,6 +169,61 @@ describe("ContextJanitorService", () => {
 		})
 	})
 
+	describe("headroom-only results", () => {
+		// A tool_result block big enough for HeadroomAdapter's 10k-char truncation.
+		function makeToolResultMsg(chars: number): JanitorMessage {
+			return {
+				role: "user",
+				content: [{ type: "tool_result", content: "y".repeat(chars) }],
+			}
+		}
+
+		it("surfaces headroom compression when the model janitor is disabled", async () => {
+			const svc = makeService({ enabled: false })
+			const messages = [makeMsg("user", "read the file"), makeToolResultMsg(50_000)]
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			expect(result?.headroomOnly).to.be.true
+			expect(result?.curatedTokensAfter).to.be.lessThan(result?.rawTokensBefore ?? 0)
+			const block = (result?.curatedMessages[1].content as Array<{ content?: unknown }>)[0]
+			expect(JSON.stringify(block.content)).to.contain("truncated by Headroom")
+			// Headroom-only runs make no model call and write no ledger entry.
+			expect((mockModelClient.getCleanupDecisions as sinon.SinonStub).called).to.be.false
+			expect((mockLedger.appendEntry as sinon.SinonStub).called).to.be.false
+			expect(result?.ledgerEntryId).to.be.undefined
+		})
+
+		it("returns null when headroom is disabled and the janitor does not run", async () => {
+			const svc = makeService({ enabled: false, headroomEnabled: false })
+			const result = await svc.maybeRunJanitor([makeToolResultMsg(50_000)])
+			expect(result).to.be.null
+		})
+
+		it("returns null when headroom compresses nothing", async () => {
+			const svc = makeService({ enabled: false })
+			const result = await svc.maybeRunJanitor(makeLargeMessages(4, 500))
+			expect(result).to.be.null
+		})
+
+		it("surfaces headroom compression when the model returns no decisions (timeout/error)", async () => {
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves([])
+			const svc = makeService()
+			const messages = [makeMsg("user", "go"), makeToolResultMsg(50_000)]
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			expect(result?.headroomOnly).to.be.true
+			expect((mockModelClient.getCleanupDecisions as sinon.SinonStub).called).to.be.true
+		})
+
+		it("tool_result block content counts toward the janitor trigger", async () => {
+			// 50k chars ≈ 13.9k tokens > the 1k test threshold — the model must be consulted.
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves([])
+			const svc = makeService()
+			await svc.maybeRunJanitor([makeToolResultMsg(50_000)])
+			expect((mockModelClient.getCleanupDecisions as sinon.SinonStub).called).to.be.true
+		})
+	})
+
 	describe("updateSettings", () => {
 		it("does not throw when settings are updated", () => {
 			const svc = makeService()
