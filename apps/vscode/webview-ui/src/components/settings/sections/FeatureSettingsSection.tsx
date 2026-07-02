@@ -438,8 +438,9 @@ const FeatureSettingsSection = ({ renderSectionHeader }: FeatureSettingsSectionP
 const AnthropicKeychainKeyField = () => {
 	const [pendingKey, setPendingKey] = useState("")
 	const [saved, setSaved] = useState(false)
+	const looksValid = pendingKey.trim().startsWith("sk-ant-") && pendingKey.trim().length >= 40
 	const save = () => {
-		if (!pendingKey.trim()) {
+		if (!looksValid) {
 			return
 		}
 		updateSetting("anthropicEscalationApiKey", pendingKey.trim())
@@ -456,7 +457,7 @@ const AnthropicKeychainKeyField = () => {
 				type="password"
 				value={pendingKey}
 			/>
-			<Button disabled={!pendingKey.trim()} onClick={save} size="sm" variant="secondary">
+			<Button disabled={!looksValid} onClick={save} size="sm" variant="secondary">
 				{saved ? "Saved ✓" : "Save to Keychain"}
 			</Button>
 		</div>

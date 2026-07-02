@@ -78,19 +78,30 @@ describe("updateSettings — anthropicEscalationApiKey (transient keychain write
 
 	it("writes the key to the macOS keychain and never into state", async () => {
 		const { controller, setGlobalState } = makeController()
+		const plausibleKey = `sk-ant-${"x".repeat(100)}`
 
-		await updateSettings(controller, UpdateSettingsRequest.create({ anthropicEscalationApiKey: "sk-ant-test-abc" }))
+		await updateSettings(controller, UpdateSettingsRequest.create({ anthropicEscalationApiKey: plausibleKey }))
 
 		expect(execFileMock).toHaveBeenCalledTimes(1)
 		const [cmd, args] = execFileMock.mock.calls[0]
 		expect(cmd).toBe("security")
 		expect(args).toContain("add-generic-password")
 		expect(args).toContain("anthropic-api-key")
-		expect(args).toContain("sk-ant-test-abc")
+		expect(args).toContain(plausibleKey)
 		// The secret must NEVER land in extension state.
 		for (const call of setGlobalState.mock.calls) {
-			expect(JSON.stringify(call)).not.toContain("sk-ant-test-abc")
+			expect(JSON.stringify(call)).not.toContain(plausibleKey)
 		}
+	})
+
+	it("refuses to overwrite the keychain with a value that is not an Anthropic key", async () => {
+		// Regression: `security add-generic-password -U` overwrites in
+		// place, so a short test string must never reach it.
+		for (const bogus of ["test", "sk-ant-short", "x".repeat(60)]) {
+			const { controller } = makeController()
+			await updateSettings(controller, UpdateSettingsRequest.create({ anthropicEscalationApiKey: bogus }))
+		}
+		expect(execFileMock).not.toHaveBeenCalled()
 	})
 
 	it("ignores an empty key", async () => {

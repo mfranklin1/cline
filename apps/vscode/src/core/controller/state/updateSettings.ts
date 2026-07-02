@@ -307,6 +307,19 @@ export async function updateSettings(controller: Controller, request: UpdateSett
 		}
 
 		if (request.anthropicEscalationApiKey !== undefined && request.anthropicEscalationApiKey.length > 0) {
+			// Validate BEFORE writing: `security add-generic-password -U`
+			// overwrites the existing entry in place, so a stray test string
+			// would destroy a working key (this happened live 2026-07-02 --
+			// the original key was unrecoverable). Anthropic keys start with
+			// sk-ant- and are ~100+ chars.
+			const candidate = request.anthropicEscalationApiKey.trim()
+			if (!candidate.startsWith("sk-ant-") || candidate.length < 40) {
+				Logger.error(
+					"Refusing to store Anthropic API key: value does not look like an Anthropic key (must start with sk-ant- and be at least 40 chars)",
+				)
+				await controller.postStateToWebview()
+				return Empty.create()
+			}
 			// TRANSIENT: persist to the macOS keychain (the single source of
 			// truth shared with ~/.claude/set-anthropic-env.sh and the local
 			// proxy) and never into extension state. execFile with an args
