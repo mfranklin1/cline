@@ -142,7 +142,11 @@ Be conservative. When in doubt, use keep. Only archive/discard old tool results 
 			const response = await fetch(`${this.settings.modelEndpoint}/v1/chat/completions`, {
 				method: "POST",
 				signal: controller.signal,
-				headers: { "Content-Type": "application/json" },
+				// X-LLM-Intent lets the proxy attribute this call in its request
+				// ledger ("intent:context-janitor") instead of an anonymous
+				// direct-model row -- janitor traffic is otherwise
+				// indistinguishable from other side-channel calls.
+				headers: { "Content-Type": "application/json", "X-LLM-Intent": "context-janitor" },
 				body: JSON.stringify({
 					model: this.settings.modelId,
 					messages: [{ role: "user", content: prompt }],

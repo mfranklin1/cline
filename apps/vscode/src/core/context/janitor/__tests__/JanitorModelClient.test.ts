@@ -115,6 +115,10 @@ describe("JanitorModelClient", () => {
 			expect(capturedInit?.signal, "fetch must receive an AbortSignal").to.be.an.instanceOf(AbortSignal)
 			const body = JSON.parse(String(capturedInit?.body)) as { stream?: boolean }
 			expect(body.stream, "request must be streaming so proxies observe client disconnects").to.equal(true)
+			const headers = capturedInit?.headers as Record<string, string> | undefined
+			expect(headers?.["X-LLM-Intent"], "janitor must self-identify for proxy-side attribution").to.equal(
+				"context-janitor",
+			)
 		})
 
 		it("falls back to parsing a plain JSON body when the server ignores stream:true", async () => {
