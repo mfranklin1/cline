@@ -173,7 +173,7 @@ export class ContextJanitorService {
 		}
 	}
 
-	async maybeRunJanitor(messages: JanitorMessage[]): Promise<JanitorRunResult | null> {
+	async maybeRunJanitor(messages: JanitorMessage[], abandonSignal?: AbortSignal): Promise<JanitorRunResult | null> {
 		// Step 1: HeadroomAdapter — mechanical compression, always run if headroomEnabled.
 		const compressedMessages = this.settings.headroomEnabled ? this.headroomAdapter.compress(messages) : messages
 
@@ -188,8 +188,16 @@ export class ContextJanitorService {
 		const existingPack = await this.ledger.getActiveContextPack(this.currentTaskId).catch(() => null)
 		const contextPack = existingPack ?? buildActiveContextPack(compressedMessages)
 
-		// Step 4: Get semantic decisions from local model.
-		const decisions = await this.modelClient.getCleanupDecisions(compressedMessages, contextPack, this.settings.maxLatencyMs)
+		// Step 4: Get semantic decisions from local model. The abandon signal
+		// aborts the in-flight HTTP request if the janitor run is abandoned
+		// (e.g. the task is cancelled) so no orphaned generation keeps running
+		// server-side.
+		const decisions = await this.modelClient.getCleanupDecisions(
+			compressedMessages,
+			contextPack,
+			this.settings.maxLatencyMs,
+			abandonSignal,
+		)
 
 		// If model returned nothing (timeout/error), bail out safely —
 		// but still surface headroom's mechanical compression.

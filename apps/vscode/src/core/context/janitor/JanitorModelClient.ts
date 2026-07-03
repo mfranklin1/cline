@@ -67,18 +67,78 @@ Actions:
 Be conservative. When in doubt, use keep. Only archive/discard old tool results with no remaining relevance.`
 	}
 
+	// Extract the assistant message content from a completion response body.
+	// Handles both SSE streaming bodies ("data: {...}" chunk lines, the shape we
+	// request via stream: true) and plain JSON bodies (servers that ignore the
+	// stream flag), so a proxy downgrade never breaks the janitor.
+	private static parseCompletionContent(bodyText: string): string {
+		const trimmed = bodyText.trim()
+		if (!trimmed) return ""
+
+		// SSE bodies carry "data:" event lines (possibly preceded by comment
+		// lines); anything else is a plain JSON completion.
+		const isSse = /^data:/m.test(trimmed)
+		if (!isSse) {
+			const data = JSON.parse(trimmed) as {
+				choices?: Array<{ message?: { content?: string } }>
+			}
+			return data?.choices?.[0]?.message?.content ?? ""
+		}
+
+		let content = ""
+		for (const rawLine of trimmed.split("\n")) {
+			const line = rawLine.trim()
+			if (!line.startsWith("data:")) continue
+			const payload = line.slice("data:".length).trim()
+			if (!payload || payload === "[DONE]") continue
+			try {
+				const chunk = JSON.parse(payload) as {
+					choices?: Array<{ delta?: { content?: string }; message?: { content?: string } }>
+				}
+				content += chunk?.choices?.[0]?.delta?.content ?? chunk?.choices?.[0]?.message?.content ?? ""
+			} catch {
+				// Malformed keep-alive/comment line — skip it, keep accumulating.
+			}
+		}
+		return content
+	}
+
 	async getCleanupDecisions(
 		messages: JanitorMessage[],
 		activeContextPack: ActiveContextPack,
 		maxLatencyMs: number,
+		abandonSignal?: AbortSignal,
 	): Promise<JanitorDecision[]> {
 		if (messages.length === 0) return []
+		// The run was abandoned before we started — don't fire a request at all.
+		if (abandonSignal?.aborted) return []
 
+		// Latency-cap abort: when the timer wins, controller.abort() must tear
+		// down the in-flight HTTP request (client disconnect), not just abandon
+		// the local promise — otherwise the model server keeps generating for an
+		// orphaned client (observed: a local Ollama grinding for the proxy's full
+		// 480s request_timeout behind a 45s janitor cap, head-of-line-blocking
+		// the session's real API calls).
 		const controller = new AbortController()
-		const timeoutId = setTimeout(() => controller.abort(), maxLatencyMs)
+		const timeoutId = setTimeout(
+			() => controller.abort(new Error(`Context Janitor latency cap (${maxLatencyMs}ms) exceeded`)),
+			maxLatencyMs,
+		)
+		// Also abort the request if the janitor run is abandoned externally
+		// (task cancelled / session torn down) while the model call is in flight.
+		const onAbandon = () => controller.abort(abandonSignal?.reason ?? new Error("Context Janitor run abandoned"))
+		abandonSignal?.addEventListener("abort", onAbandon, { once: true })
 
 		try {
 			const prompt = this.buildJanitorPrompt(messages, activeContextPack)
+			// stream: true is load-bearing for abort propagation. With a buffered
+			// (non-streaming) completion, an OpenAI-compatible proxy in the middle
+			// (e.g. LiteLLM) has no cancellation point: our disconnect closes the
+			// client socket, but the proxy keeps awaiting the upstream model until
+			// its own request_timeout. A streaming response is delivered through
+			// the proxy chunk-by-chunk, so aborting mid-stream is observed by the
+			// proxy immediately and cancellation reaches the model server (Ollama
+			// honors client disconnects and stops generation).
 			const response = await fetch(`${this.settings.modelEndpoint}/v1/chat/completions`, {
 				method: "POST",
 				signal: controller.signal,
@@ -89,6 +149,7 @@ Be conservative. When in doubt, use keep. Only archive/discard old tool results 
 					temperature: 0.1,
 					max_tokens: 4096,
 					response_format: { type: "json_object" },
+					stream: true,
 				}),
 			})
 
@@ -96,10 +157,11 @@ Be conservative. When in doubt, use keep. Only archive/discard old tool results 
 				return []
 			}
 
-			const data = (await response.json()) as {
-				choices?: Array<{ message?: { content?: string } }>
-			}
-			const content = data?.choices?.[0]?.message?.content
+			// text() consumes the body under the same abort signal, so the
+			// latency cap also covers a response that starts quickly but streams
+			// slowly.
+			const bodyText = await response.text()
+			const content = JanitorModelClient.parseCompletionContent(bodyText)
 			if (!content) return []
 
 			// Strip any markdown fences the model may have added.
@@ -111,10 +173,13 @@ Be conservative. When in doubt, use keep. Only archive/discard old tool results 
 			if (!Array.isArray(parsed?.decisions)) return []
 			return parsed.decisions
 		} catch {
-			// Timeout, network error, or JSON parse failure — safe fallback: keep everything.
+			// Timeout, abort, network error, or JSON parse failure — safe
+			// fallback: keep everything. Janitor failures must never throw into
+			// the beforeModel hook path.
 			return []
 		} finally {
 			clearTimeout(timeoutId)
+			abandonSignal?.removeEventListener("abort", onAbandon)
 		}
 	}
 }

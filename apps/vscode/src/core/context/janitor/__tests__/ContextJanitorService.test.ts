@@ -167,6 +167,19 @@ describe("ContextJanitorService", () => {
 			expect(result?.curatedMessages[1].content as string).to.contain("Summarized by Context Janitor")
 			expect(result?.curatedMessages[1].content as string).to.contain("Ran tests; 2 passed")
 		})
+
+		it("forwards the abandon signal to the model client so in-flight requests can be aborted", async () => {
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves([])
+			const svc = makeService()
+			const messages = makeLargeMessages(10, 400)
+			const abandon = new AbortController()
+
+			await svc.maybeRunJanitor(messages, abandon.signal)
+
+			const stub = mockModelClient.getCleanupDecisions as sinon.SinonStub
+			expect(stub.calledOnce).to.be.true
+			expect(stub.firstCall.args[3]).to.equal(abandon.signal)
+		})
 	})
 
 	describe("headroom-only results", () => {
