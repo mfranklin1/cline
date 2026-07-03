@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest"
+import { llmFetch } from "./llm-fetch"
 import { buildSdkProviderConfig } from "./sdk-api-handler"
 
 const mocks = vi.hoisted(() => {
@@ -81,5 +82,22 @@ describe("buildSdkProviderConfig", () => {
 			apiKey: "v0-key",
 		})
 		expect(mocks.providerSettingsManager.getProviderSettings).toHaveBeenCalledWith("v0")
+	})
+
+	it("wires the LLM fetch (raised first-byte timeout) into the provider config", () => {
+		const providerConfig = buildSdkProviderConfig(
+			{
+				actModeApiProvider: "openai",
+				actModeOpenAiModelId: "hybrid-auto",
+				openAiBaseUrl: "http://127.0.0.1:4000",
+				openAiApiKey: "litellm-key",
+			},
+			"act",
+		)
+
+		// Must be the LLM-scoped fetch (undici dispatcher with raised
+		// headersTimeout/bodyTimeout), not @/shared/net's default fetch —
+		// otherwise slow-first-byte local models abort at undici's 300s default.
+		expect(providerConfig.fetch).toBe(llmFetch)
 	})
 })

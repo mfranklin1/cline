@@ -15,6 +15,7 @@ import {
 	resolveApiKey,
 	updateHistoryItem,
 } from "./cline-session-factory"
+import { llmFetch } from "./llm-fetch"
 
 const mocks = vi.hoisted(() => {
 	const providerSettingsManager = {
@@ -287,6 +288,25 @@ describe("buildSessionConfig", () => {
 
 		expect(config.providerId).toBe("cline")
 		expect(config.apiKey).toBe("workos:test-access-token")
+	})
+
+	it("wires the LLM fetch (raised first-byte timeout) into providerConfig", async () => {
+		mocks.stateManager.getApiConfiguration.mockReturnValue({
+			actModeApiProvider: "openai",
+			actModeOpenAiModelId: "hybrid-auto",
+			openAiBaseUrl: "http://127.0.0.1:4000",
+			openAiApiKey: "litellm-key",
+		} as any)
+
+		const config = await buildSessionConfig({ cwd: "/tmp/workspace" })
+
+		// providerConfig.fetch wins over ClineCoreOptions/defaults in the SDK's
+		// bootstrap precedence (session > provider > host default), so this is
+		// the load-bearing assertion: the main task loop's LLM calls must go
+		// through the undici dispatcher with raised headersTimeout/bodyTimeout,
+		// not @/shared/net's default fetch (300s first-byte abort on slow local
+		// model prefill).
+		expect((config.providerConfig as { fetch?: typeof fetch } | undefined)?.fetch).toBe(llmFetch)
 	})
 
 	it("resolves ClinePass from the shared Cline OAuth credentials", async () => {

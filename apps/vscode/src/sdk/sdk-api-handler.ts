@@ -10,9 +10,9 @@
 import { type ApiHandler, createHandler, type ProviderConfig } from "@cline/llms"
 import type { ApiConfiguration } from "@shared/api"
 import type { Mode } from "@shared/storage/types"
-import { fetch } from "@/shared/net"
 import { buildBedrockProviderConfig } from "./bedrock-config"
 import { resolveApiKey, resolveBaseUrl, resolveModelId, resolveVertexProviderConfig } from "./cline-session-factory"
+import { llmFetch } from "./llm-fetch"
 import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
 
 export interface BuildApiHandlerOptions {
@@ -63,9 +63,11 @@ export function buildSdkProviderConfig(
 		apiKey: apiKey ?? "",
 		baseUrl,
 		...(vertexProviderConfig ?? {}),
-		// Use the proxy-aware fetch so gateway providers respect corporate proxy
-		// configuration (see .clinerules/network.md).
-		fetch,
+		// Use the proxy-aware LLM fetch so gateway providers respect corporate
+		// proxy configuration (see .clinerules/network.md) and slow-first-byte
+		// local models aren't aborted by undici's default 300s headersTimeout
+		// (see llm-fetch.ts).
+		fetch: llmFetch,
 		onRetryAttempt: configuration.onRetryAttempt,
 		// Bedrock needs its region + structured AWS auth options forwarded to the
 		// SDK gateway. Without these, a pasted Bedrock API key / region is dropped.

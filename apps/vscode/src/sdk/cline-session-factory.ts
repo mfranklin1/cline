@@ -29,11 +29,11 @@ import { StateManager } from "@/core/storage/StateManager"
 import { ExtensionRegistryInfo } from "@/registry"
 import { getFeatureFlagsService } from "@/services/feature-flags"
 import { getDistinctId } from "@/services/logging/distinctId"
-import { fetch } from "@/shared/net"
 import { FeatureFlag } from "@/shared/services/feature-flags/feature-flags"
 import { type BedrockProviderConfig, buildBedrockProviderConfig } from "./bedrock-config"
 import { buildAgentHooks } from "./hooks-adapter"
 import { readTaskHistory, resolveDataDir } from "./legacy-state-reader"
+import { llmFetch } from "./llm-fetch"
 import { toSdkProviderId } from "./model-catalog/sdk-provider-id"
 import { getProviderSettingsManager } from "./provider-migration"
 import { buildSapProviderConfig, type SapProviderConfig } from "./sap-config"
@@ -661,21 +661,23 @@ export async function buildSessionConfig(input: SessionConfigInput): Promise<Cor
 	// extension's "openai"). Convert before handing the id to core.
 	const sdkProviderId = toSdkProviderId(providerId)
 
-	// Always pass a providerConfig so the proxy/CA-aware fetch reaches the SDK
-	// gateway; without it the agent loop uses bare global fetch and corporate
-	// proxy/self-signed CA setups fail on JetBrains and CLI. Cloud providers
-	// additionally need structured options (region/project/auth/SAP OAuth), which core
-	// reads from providerConfig in createAgentModelFromConfig.
+	// Always pass a providerConfig so the proxy-aware LLM fetch reaches the SDK
+	// gateway; without it the agent loop uses bare global fetch, so corporate
+	// proxy setups fail on JetBrains and CLI AND undici's default 300s
+	// headersTimeout aborts slow-first-byte local models mid-prefill (see
+	// llm-fetch.ts). Cloud providers additionally need structured options
+	// (region/project/auth/SAP OAuth), which core reads from providerConfig in
+	// createAgentModelFromConfig.
 	const cloudProviderConfig = bedrockProviderConfig ?? vertexProviderConfig ?? sapProviderConfig
 	// Spread the cloud config first so the explicit fields below — notably the
-	// proxy/CA-aware fetch — can never be clobbered if those types gain matching keys.
+	// proxy-aware LLM fetch — can never be clobbered if those types gain matching keys.
 	const providerConfig = {
 		...(cloudProviderConfig ?? {}),
 		providerId: sdkProviderId,
 		modelId,
 		...(apiKey ? { apiKey } : {}),
 		...(baseUrl !== undefined ? { baseUrl } : {}),
-		fetch,
+		fetch: llmFetch,
 	}
 
 	const config: CoreSessionConfig = {
