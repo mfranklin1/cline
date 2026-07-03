@@ -81,13 +81,27 @@ export interface JanitorSettings {
 	headroomEnabled: boolean
 }
 
+// Defaults tuned for the MacM4LocalAgent hybrid stack (2026-07-02):
+//
+// - triggerTokens 24K / growth 8K: the janitor's estimate only sees the
+//   conversation -- the ~75K-token tools+system wire overhead is invisible
+//   to it -- and the proxy escalates to Claude at 85% of local-long's 131K
+//   num_ctx (~111K wire ≈ ~36K conversation-visible). The old 64K trigger
+//   sat ABOVE the point where the wire request already blows the local
+//   ceiling, so the janitor never fired before the session was lost.
+// - modelId claude-code: curation is a huge-input/small-output call with
+//   no shared KV prefix -- on the local 80B it's a 6+ minute cold prefill
+//   that head-of-line-blocks the session behind Ollama's Parallel:1; on
+//   the Claude subscription tier it completes in seconds for ~zero cost.
+// - maxLatencyMs 90K: headroom for proxy round-trips + subscription 429
+//   backoff; abort propagation (streaming) frees upstream on expiry.
 export const DEFAULT_JANITOR_SETTINGS: JanitorSettings = {
 	enabled: false,
-	triggerTokens: 64_000,
-	growthTriggerTokens: 20_000,
+	triggerTokens: 24_000,
+	growthTriggerTokens: 8_000,
 	modelEndpoint: "http://127.0.0.1:4000",
-	modelId: "local-long",
-	maxLatencyMs: 45_000,
+	modelId: "claude-code",
+	maxLatencyMs: 90_000,
 	headroomEnabled: true,
 }
 
