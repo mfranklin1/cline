@@ -1,5 +1,5 @@
 import { UpdateSettingsRequest } from "@shared/proto/cline/state"
-import { beforeEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import type { Controller } from ".."
 import { updateSettings } from "./updateSettings"
 
@@ -72,8 +72,18 @@ describe("updateSettings — claudeEscalationModel", () => {
 })
 
 describe("updateSettings — anthropicEscalationApiKey (transient keychain write)", () => {
+	// The keychain write is guarded by process.platform === "darwin". Force
+	// darwin so the mocked `security` path is exercised on Linux/Windows CI
+	// runners too (and the negative tests don't pass vacuously there).
+	const realPlatform = process.platform
+
 	beforeEach(() => {
 		execFileMock.mockClear()
+		Object.defineProperty(process, "platform", { value: "darwin", configurable: true })
+	})
+
+	afterEach(() => {
+		Object.defineProperty(process, "platform", { value: realPlatform, configurable: true })
 	})
 
 	it("writes the key to the macOS keychain and never into state", async () => {
