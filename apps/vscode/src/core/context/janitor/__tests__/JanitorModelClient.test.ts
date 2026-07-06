@@ -1,6 +1,6 @@
 import { expect } from "chai"
 import { mockFetchForTesting } from "@/shared/net"
-import { JanitorModelClient } from "../JanitorModelClient"
+import { JanitorModelClient, stripCodeFences } from "../JanitorModelClient"
 import { ActiveContextPack, DEFAULT_JANITOR_SETTINGS, JanitorDecision, JanitorMessage } from "../types"
 
 type MockFetch = Parameters<typeof mockFetchForTesting>[0]
@@ -116,9 +116,7 @@ describe("JanitorModelClient", () => {
 			const body = JSON.parse(String(capturedInit?.body)) as { stream?: boolean }
 			expect(body.stream, "request must be streaming so proxies observe client disconnects").to.equal(true)
 			const headers = capturedInit?.headers as Record<string, string> | undefined
-			expect(headers?.["X-LLM-Intent"], "janitor must self-identify for proxy-side attribution").to.equal(
-				"context-janitor",
-			)
+			expect(headers?.["X-LLM-Intent"], "janitor must self-identify for proxy-side attribution").to.equal("context-janitor")
 		})
 
 		it("falls back to parsing a plain JSON body when the server ignores stream:true", async () => {
@@ -282,6 +280,41 @@ describe("JanitorModelClient", () => {
 			})
 		})
 
+		it("parses a fenced response with leading whitespace and bare fences (observed live)", async () => {
+			const decisions: JanitorDecision[] = [{ messageIndex: 0, action: "archive", reason: "stale", confidence: 0.9 }]
+			// Leading newline before a bare (no language tag) fence — the shape
+			// that made the previous ^```json-anchored strip fail.
+			const fencedContent = `\n\`\`\`\n${JSON.stringify({ decisions })}\n\`\`\`\n`
+			const client = new JanitorModelClient(settings)
+
+			await mockFetchForTesting(textResponse(sseBody(fencedContent)), async () => {
+				const result = await client.getCleanupDecisions([makeMsg("user", "hello")], makePack(), 5_000)
+				expect(result).to.have.length(1)
+				expect(result[0].action).to.equal("archive")
+			})
+		})
+
+		it("parses a fenced response surrounded by prose", async () => {
+			const decisions: JanitorDecision[] = [{ messageIndex: 0, action: "keep", reason: "user turn", confidence: 1.0 }]
+			const fencedContent = `Here are the cleanup decisions:\n\n\`\`\`json\n${JSON.stringify({ decisions })}\n\`\`\`\n\nLet me know if you need anything else.`
+			const client = new JanitorModelClient(settings)
+
+			await mockFetchForTesting(textResponse(sseBody(fencedContent)), async () => {
+				const result = await client.getCleanupDecisions([makeMsg("user", "hello")], makePack(), 5_000)
+				expect(result).to.have.length(1)
+				expect(result[0].action).to.equal("keep")
+			})
+		})
+
+		it("returns empty array when a fenced block contains garbage", async () => {
+			const client = new JanitorModelClient(settings)
+
+			await mockFetchForTesting(textResponse(sseBody("```json\nnot json {{{{\n```")), async () => {
+				const result = await client.getCleanupDecisions([makeMsg("user", "hello")], makePack(), 5_000)
+				expect(result).to.deep.equal([])
+			})
+		})
+
 		it("handles multiple messages with content preview truncation", async () => {
 			const decisions: JanitorDecision[] = [
 				{ messageIndex: 0, action: "keep", reason: "user", confidence: 1.0 },
@@ -296,6 +329,41 @@ describe("JanitorModelClient", () => {
 				expect(result).to.have.length(2)
 				expect(result[1].action).to.equal("summarize")
 			})
+		})
+	})
+
+	describe("stripCodeFences", () => {
+		const json = '{"decisions":[]}'
+
+		it("extracts the payload from a ```json fenced block", () => {
+			expect(stripCodeFences(`\`\`\`json\n${json}\n\`\`\``)).to.equal(json)
+		})
+
+		it("extracts the payload from bare ``` fences", () => {
+			expect(stripCodeFences(`\`\`\`\n${json}\n\`\`\``)).to.equal(json)
+		})
+
+		it("tolerates leading and trailing whitespace around the fence", () => {
+			expect(stripCodeFences(`  \n\n\`\`\`json\n${json}\n\`\`\`\n\n  `)).to.equal(json)
+		})
+
+		it("extracts the first fenced block when prose surrounds it", () => {
+			const content = `Sure! Here you go:\n\`\`\`json\n${json}\n\`\`\`\nAnything else?`
+			expect(stripCodeFences(content)).to.equal(json)
+		})
+
+		it("returns unfenced content trimmed and otherwise unchanged", () => {
+			expect(stripCodeFences(`\n  ${json}  \n`)).to.equal(json)
+			expect(stripCodeFences(json)).to.equal(json)
+		})
+
+		it("handles a fence with no trailing newline before the closing marker", () => {
+			expect(stripCodeFences(`\`\`\`json ${json}\`\`\``)).to.equal(json)
+		})
+
+		it("passes garbage through for the caller's parse-failure fallback", () => {
+			expect(stripCodeFences("not json {{{{")).to.equal("not json {{{{")
+			expect(stripCodeFences("")).to.equal("")
 		})
 	})
 })

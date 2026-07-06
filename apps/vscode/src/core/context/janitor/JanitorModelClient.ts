@@ -19,6 +19,23 @@ function previewContent(msg: JanitorMessage, index: number): string {
 	return `[${index}] role=${msg.role}\n${preview}${truncated}`
 }
 
+// Extract the JSON payload from model output that may be wrapped in markdown
+// code fences (```json ... ``` or bare ``` ... ```), tolerant of leading /
+// trailing whitespace and prose before or after the fence. Returns the first
+// fenced block's inner text when one is present; otherwise the trimmed input
+// unchanged, so bare-JSON responses are unaffected. Pure string transform —
+// never throws; callers keep the unparseable-input-returns-[] contract.
+export function stripCodeFences(content: string): string {
+	// ``` + optional language tag (e.g. json) + optional newline, lazily up to
+	// the next ```. [^\S\n] = horizontal whitespace only, so the language tag
+	// must sit on the opening-fence line.
+	const fenced = /```[^\S\n]*[a-zA-Z0-9_-]*[^\S\n]*\n?([\s\S]*?)```/.exec(content)
+	if (fenced) {
+		return fenced[1].trim()
+	}
+	return content.trim()
+}
+
 export class JanitorModelClient {
 	constructor(private readonly settings: JanitorSettings) {}
 
@@ -168,11 +185,11 @@ Be conservative. When in doubt, use keep. Only archive/discard old tool results 
 			const content = JanitorModelClient.parseCompletionContent(bodyText)
 			if (!content) return []
 
-			// Strip any markdown fences the model may have added.
-			const cleaned = content
-				.replace(/^```json\s*/i, "")
-				.replace(/\s*```$/, "")
-				.trim()
+			// Strip any markdown fences the model may have added (observed
+			// live: claude tiers return ```json\n{...}\n``` despite the
+			// response_format hint, which made JSON.parse throw, decisions
+			// fall back to [], and the janitor re-fire every turn).
+			const cleaned = stripCodeFences(content)
 			const parsed = JSON.parse(cleaned) as { decisions?: JanitorDecision[] }
 			if (!Array.isArray(parsed?.decisions)) return []
 			return parsed.decisions
