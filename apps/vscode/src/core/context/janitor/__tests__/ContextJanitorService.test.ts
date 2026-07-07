@@ -95,7 +95,12 @@ describe("ContextJanitorService", () => {
 			expect(result?.curatedMessages).to.have.length(3)
 		})
 
-		it("enforces inviolable rule: user messages are always kept even if model says discard", async () => {
+		// Updated for the v4 tool-result curation fix: the NEVER_DISCARD_USER
+		// rule now protects HUMAN user turns specifically. These messages carry
+		// no isToolResult flag, so the veto must still hold — pure tool-result
+		// messages (which also travel under the user role in v4) are exercised
+		// in the "tool-result curation" block below.
+		it("enforces inviolable rule: human user messages are always kept even if model says discard", async () => {
 			// Total must exceed 1000 tokens (3600 chars). Use 1800 chars per assistant message.
 			const messages = [
 				makeMsg("user", "Fix the auth bug"),
@@ -179,6 +184,108 @@ describe("ContextJanitorService", () => {
 			const stub = mockModelClient.getCleanupDecisions as sinon.SinonStub
 			expect(stub.calledOnce).to.be.true
 			expect(stub.firstCall.args[3]).to.equal(abandon.signal)
+		})
+	})
+
+	describe("tool-result curation (v4 tool outputs under the user role)", () => {
+		// In the v4 SDK runtime tool results travel in user-role messages; the
+		// hook flags them isToolResult so the NEVER_DISCARD_USER veto (which
+		// protects HUMAN turns) no longer cancels every archive decision on
+		// tool outputs. Pre-fix, curation had zero effect: context never
+		// shrank and the janitor re-fired every turn.
+		function makeToolResult(text: string): JanitorMessage {
+			return { role: "user", content: [{ type: "tool_result", content: text }], isToolResult: true }
+		}
+
+		it("applies archive decisions to tool-result user-role messages (tombstoned, pairing anchor kept)", async () => {
+			const messages = [
+				makeMsg("user", "read the file"),
+				makeMsg("assistant", "x".repeat(1_000)),
+				makeToolResult("y".repeat(5_000)), // no error keywords / diff markers
+				makeMsg("assistant", "done"),
+			]
+			const decisions: JanitorDecision[] = [
+				{ messageIndex: 0, action: "keep", reason: "human turn", confidence: 1.0 },
+				{ messageIndex: 1, action: "keep", reason: "recent", confidence: 1.0 },
+				{ messageIndex: 2, action: "archive", reason: "stale file read", confidence: 0.9 },
+				{ messageIndex: 3, action: "keep", reason: "recent", confidence: 1.0 },
+			]
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves(decisions)
+			const svc = makeService()
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			// The message survives as a tombstone (the pairing anchor for the
+			// hook's matchCuratedBack), not verbatim and not dropped.
+			expect(result?.curatedMessages).to.have.length(4)
+			const tombstone = result?.curatedMessages[2]
+			expect(tombstone?.isToolResult).to.be.true
+			expect(JSON.stringify(tombstone?.content)).to.contain("[Archived by Context Janitor]: stale file read")
+			expect(JSON.stringify(tombstone?.content)).to.not.contain("yyyy")
+			// The archive actually shrinks the context — the pre-fix bug was
+			// that curation never did.
+			expect(result?.curatedTokensAfter).to.be.lessThan(result?.rawTokensBefore ?? 0)
+		})
+
+		it("still vetoes archive on human user turns (no isToolResult flag)", async () => {
+			const messages = [makeMsg("user", "important human instruction"), makeMsg("assistant", "x".repeat(4_000))]
+			const decisions: JanitorDecision[] = [
+				{ messageIndex: 0, action: "archive", reason: "model mistake", confidence: 0.9 },
+				{ messageIndex: 1, action: "keep", reason: "recent", confidence: 1.0 },
+			]
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves(decisions)
+			const svc = makeService()
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			expect(result?.curatedMessages[0]).to.deep.equal(messages[0])
+		})
+
+		it("keeps error-containing tool results verbatim even when the model says archive", async () => {
+			const errorOutput = `Error: connection refused\n${"y".repeat(4_000)}`
+			const messages = [makeMsg("user", "run the request"), makeToolResult(errorOutput)]
+			const decisions: JanitorDecision[] = [
+				{ messageIndex: 0, action: "keep", reason: "human turn", confidence: 1.0 },
+				{ messageIndex: 1, action: "archive", reason: "stale output", confidence: 0.9 },
+			]
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves(decisions)
+			const svc = makeService()
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			expect(result?.curatedMessages).to.have.length(2)
+			const kept = JSON.stringify(result?.curatedMessages[1].content)
+			expect(kept).to.contain("Error: connection refused")
+			expect(kept).to.not.contain("Archived by Context Janitor")
+		})
+
+		it("keeps diff-bearing tool results verbatim even when the model says archive", async () => {
+			const diffOutput = `diff --git a/x.ts b/x.ts\n--- a/x.ts\n+++ b/x.ts\n@@ -1 +1 @@\n${"y".repeat(4_000)}`
+			const messages = [makeMsg("user", "apply the patch"), makeToolResult(diffOutput)]
+			const decisions: JanitorDecision[] = [
+				{ messageIndex: 0, action: "keep", reason: "human turn", confidence: 1.0 },
+				{ messageIndex: 1, action: "archive", reason: "stale output", confidence: 0.9 },
+			]
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves(decisions)
+			const svc = makeService()
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			const kept = JSON.stringify(result?.curatedMessages[1].content)
+			expect(kept).to.contain("diff --git")
+			expect(kept).to.not.contain("Archived by Context Janitor")
+		})
+
+		it("protects unflagged user-role tool_result messages (mixed content is never flagged by the hook)", async () => {
+			// A tool_result block WITHOUT isToolResult models the hook's mixed
+			// human-text + tool-result case: human wins, full veto applies.
+			const mixed: JanitorMessage = { role: "user", content: [{ type: "tool_result", content: "y".repeat(5_000) }] }
+			const messages = [mixed, makeMsg("assistant", "done")]
+			const decisions: JanitorDecision[] = [
+				{ messageIndex: 0, action: "archive", reason: "stale output", confidence: 0.9 },
+				{ messageIndex: 1, action: "keep", reason: "recent", confidence: 1.0 },
+			]
+			;(mockModelClient.getCleanupDecisions as sinon.SinonStub).resolves(decisions)
+			const svc = makeService()
+			const result = await svc.maybeRunJanitor(messages)
+			expect(result).to.not.be.null
+			expect(JSON.stringify(result?.curatedMessages[0].content)).to.not.contain("Archived by Context Janitor")
 		})
 	})
 

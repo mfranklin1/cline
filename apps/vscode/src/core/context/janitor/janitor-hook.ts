@@ -50,14 +50,39 @@ function janitorRole(msg: AgentMessage): "user" | "assistant" {
 	return msg.role === "tool" ? "user" : (msg.role as "user" | "assistant")
 }
 
+// A message is a PURE tool result when everything it carries is machine tool
+// output. Role "tool" messages qualify even when the runtime attaches sibling
+// text parts (tool banners — not human-authored); a user-role message
+// qualifies only when every part is a tool-result. Mixed human-text +
+// tool-result messages are NOT flagged, so they keep full human-turn
+// protection in applyDecisions (human wins).
+function isPureToolResult(msg: AgentMessage): boolean {
+	if (!hasPartType(msg, "tool-result")) {
+		return false
+	}
+	if (msg.role === "tool") {
+		return true
+	}
+	return msg.content.every((p) => p.type === "tool-result")
+}
+
 function agentMessageToJanitor(msg: AgentMessage): JanitorMessage {
 	const text = messageText(msg)
 	// Tool results ride in a tool_result block so HeadroomAdapter's mechanical
 	// compression (truncation, install/test-output squashing, file-read dedup)
 	// applies to them and never to human-authored text, which travels as a
 	// text block that headroom leaves untouched.
+	//
+	// isToolResult carries the provenance into applyDecisions: tool results
+	// map to the user role in the janitor's message model, and without the
+	// flag the NEVER_DISCARD_USER veto would cancel every archive decision on
+	// tool outputs — the exact content curation exists to trim.
 	if (hasPartType(msg, "tool-result")) {
-		return { role: janitorRole(msg), content: [{ type: "tool_result", content: text }] }
+		return {
+			role: janitorRole(msg),
+			content: [{ type: "tool_result", content: text }],
+			isToolResult: isPureToolResult(msg),
+		}
 	}
 	return { role: janitorRole(msg), content: [{ type: "text", text }] }
 }

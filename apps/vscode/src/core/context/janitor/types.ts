@@ -57,6 +57,16 @@ export interface JanitorMessage {
 				content?: string | Array<{ type: string; text?: string }>
 				[key: string]: unknown
 		  }>
+	/**
+	 * True when this message is PURE machine tool output (v4 tool-result
+	 * parts and nothing else). In the v4 SDK runtime tool results travel
+	 * under the user role, but they are not human turns — NEVER_DISCARD_USER
+	 * protects human-authored text only, so applyDecisions may honor
+	 * archive/summarize decisions on flagged messages. Absent/false means
+	 * the user-role message is (or may contain) a human turn and stays
+	 * protected: a mixed human-text + tool-result message is never flagged.
+	 */
+	isToolResult?: boolean
 }
 
 export interface JanitorRunResult {
