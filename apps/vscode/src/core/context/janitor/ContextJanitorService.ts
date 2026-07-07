@@ -91,11 +91,18 @@ function applyDecisions(messages: JanitorMessage[], decisions: JanitorDecision[]
 		}
 
 		// Enforce inviolable rules regardless of model output.
-		const isUserTurn = msg.role === "user"
+		// NEVER_DISCARD_USER protects HUMAN turns. In the v4 runtime tool
+		// results also travel under the user role, but they are machine
+		// output — the exact content curation exists to trim — so messages
+		// the hook flagged isToolResult are exempt from the user veto (mixed
+		// human-text + tool-result messages are never flagged, so they stay
+		// protected). Error- and diff-bearing messages stay protected
+		// unconditionally, tool result or not.
+		const isProtectedHumanTurn = msg.role === "user" && msg.isToolResult !== true
 		const hasError = messageContainsError(msg)
 		const hasDiff = messageContainsDiff(msg)
 
-		if (isUserTurn || hasError || hasDiff) {
+		if (isProtectedHumanTurn || hasError || hasDiff) {
 			// Force keep.
 			result.push(msg)
 			continue
@@ -104,14 +111,27 @@ function applyDecisions(messages: JanitorMessage[], decisions: JanitorDecision[]
 		switch (decision.action) {
 			case "summarize":
 				if (decision.summary) {
-					result.push({ role: msg.role, content: `[Summarized by Context Janitor]: ${decision.summary}` })
+					// Spread preserves role and isToolResult so downstream
+					// consumers keep the provenance.
+					result.push({ ...msg, content: `[Summarized by Context Janitor]: ${decision.summary}` })
 				} else {
 					result.push(msg)
 				}
 				break
 			case "archive":
 			case "discard":
-				// Exclude from result.
+				if (msg.isToolResult) {
+					// A fully-dropped tool result would be re-inserted
+					// verbatim by the hook's matchCuratedBack (tool-call
+					// pairing must never be orphaned), silently undoing the
+					// archive. Keep a tiny tombstone instead: the pairing
+					// anchor survives while the payload tokens are released.
+					result.push({
+						...msg,
+						content: [{ type: "tool_result", content: `[Archived by Context Janitor]: ${decision.reason}` }],
+					})
+				}
+				// Otherwise exclude from result.
 				break
 			default:
 				result.push(msg)
